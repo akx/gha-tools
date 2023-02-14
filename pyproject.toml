@@ -1,0 +1,104 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gha-tools"
+description = ''
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+keywords = []
+authors = [
+    { name = "Aarni Koskela", email = "akx@iki.fi" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+    "click>=7",
+]
+dynamic = ["version"]
+
+[project.urls]
+Documentation = "https://github.com/akx/gha-tools#readme"
+Issues = "https://github.com/akx/gha-tools/issues"
+Source = "https://github.com/akx/gha-tools"
+
+[project.scripts]
+gha-tools = "gha_tools.cli:main"
+
+[tool.hatch.version]
+path = "gha_tools/__about__.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest",
+    "pytest-cov",
+]
+[tool.hatch.envs.default.scripts]
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=gha_tools --cov=tests {args}"
+no-cov = "cov --no-cov {args}"
+
+[[tool.hatch.envs.test.matrix]]
+python = ["37", "38", "39", "310", "311"]
+
+[tool.coverage.run]
+branch = true
+parallel = true
+omit = [
+    "gha_tools/__about__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "no cov",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.ruff]
+target-version = "py37"
+select = [
+    "B",
+    "C",
+    "COM",
+    "E",
+    "EM",
+    "F",
+    "FBT",
+    "G",
+    "I",
+    "RET",
+    "T2",
+    "TID",
+    "TRY",
+    "UP",
+]
+ignore = [
+    "EM101",
+    "EM102",
+    "G004",
+    "TCH003",
+    "TRY003",
+]
+unfixable = [
+    "T2", # don't automatically remove prints
+]
+
+[tool.ruff.flake8-tidy-imports]
+ban-relative-imports = "all"
