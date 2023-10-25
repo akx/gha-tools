@@ -21,3 +21,4 @@ def test_autoupdate():
     assert "+      - uses: actions/checkout@v" in result.output
     assert "-      - uses: actions/setup-python@v1" in result.output
     assert "+      - uses: actions/setup-python@v" in result.output
+    assert "beta" not in result.output

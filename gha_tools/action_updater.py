@@ -21,10 +21,18 @@ class VersionStrategy(Enum):
     SPECIFIC = "specific"
 
 
+def is_beta_or_rc(ver: str) -> bool:
+    if "-beta" in ver:
+        return True
+    if "-rc" in ver:
+        return True
+    return False
+
+
 @dataclasses.dataclass(frozen=True)
 class ActionVersions:
     name: str
-    version_infos: list[dict]
+    all_version_infos: list[dict]
 
     @classmethod
     @lru_cache(maxsize=None)
@@ -33,15 +41,25 @@ class ActionVersions:
         action_tags = get_github_json(
             f"https://api.github.com/repos/{action_name}/tags",
         )
-        return cls(name=action_name, version_infos=action_tags)
+        return cls(name=action_name, all_version_infos=action_tags)
+
+    @property
+    def non_beta_or_rc_version_infos(self) -> list[dict]:
+        return [
+            version_info
+            for version_info in self.all_version_infos
+            if not is_beta_or_rc(version_info["name"])
+        ]
 
     @property
     def latest_version(self) -> str:
-        return self.version_infos[0]["name"]
+        return self.non_beta_or_rc_version_infos[0]["name"]
 
     @property
     def version_names(self) -> list[str]:
-        return [version_info["name"] for version_info in self.version_infos]
+        return [
+            version_info["name"] for version_info in self.non_beta_or_rc_version_infos
+        ]
 
     @property
     def latest_major_version(self) -> str:
