@@ -7,6 +7,8 @@ import click
 
 from gha_tools.action_updater import VersionStrategy, get_action_updates_for_path
 
+yaml_extensions = (".yml", ".yaml")
+
 log = logging.getLogger(__name__)
 
 
@@ -41,14 +43,7 @@ def autoupdate(
     version_strategy: str,
 ) -> None:
     version_strategy = VersionStrategy(version_strategy)
-    actual_files = []
-    for file in files:
-        if file.is_dir():
-            actual_files.extend(file.rglob("*.yml"))
-        elif file.is_file() and file.suffix == ".yml":
-            actual_files.append(file)
-        else:
-            click.echo(f"Skipping {file} because it is not a YAML file.", err=True)
+    actual_files = list(find_files(files))
 
     if not actual_files:
         raise click.UsageError("No files or directories specified.")
@@ -70,3 +65,14 @@ def autoupdate(
         if write:
             result.write()
             log.info("  => Updated %s.", file)
+
+
+def find_files(files: list[Path]):
+    for file in files:
+        if file.is_dir():
+            for ext in yaml_extensions:
+                yield from file.rglob(f"*{ext}")
+        elif file.is_file() and file.suffix in yaml_extensions:
+            yield file
+        else:
+            click.echo(f"Skipping {file} because it is not a YAML file.", err=True)
