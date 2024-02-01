@@ -8,6 +8,7 @@ import re
 from enum import Enum
 from functools import lru_cache, partial
 from pathlib import Path
+from urllib.error import HTTPError
 
 from gha_tools.github_api import get_github_json
 
@@ -38,10 +39,20 @@ class ActionVersions:
     @lru_cache(maxsize=None)
     def from_github(cls, action_name: str) -> ActionVersions:
         log.debug("Fetching versions for %s...", action_name)
-        action_tags = get_github_json(
-            f"https://api.github.com/repos/{action_name}/tags",
-        )
+        try:
+            action_tags = get_github_json(
+                f"https://api.github.com/repos/{action_name}/tags",
+            )
+        except HTTPError as he:
+            if he.status == 404:
+                log.warning("Action %s (or tags for it) not found.", action_name)
+                return cls(name=action_name, all_version_infos=[])
+            raise
         return cls(name=action_name, all_version_infos=action_tags)
+
+    @property
+    def has_versions(self) -> bool:
+        return bool(self.all_version_infos)
 
     @property
     def non_beta_or_rc_version_infos(self) -> list[dict]:
@@ -143,18 +154,23 @@ def _fixup_use(
         return match.group(0)
     spec = ActionSpec.from_string(action_name)
     new_version = get_new_version_with_strategy(spec, version_strategy)
-    updated_spec = spec.with_version(new_version)
-    if spec != updated_spec:
-        updates.append(ActionUpdate(spec, updated_spec))
-        return f"{match.group('prelude')}{updated_spec}"
+    if new_version:
+        updated_spec = spec.with_version(new_version)
+        if spec != updated_spec:
+            updates.append(ActionUpdate(spec, updated_spec))
+            return f"{match.group('prelude')}{updated_spec}"
+    else:
+        log.info("Could not determine version for %s", spec)
     return match.group(0)
 
 
 def get_new_version_with_strategy(
     spec: ActionSpec,
     version_strategy: VersionStrategy,
-) -> str:
+) -> str | None:
     versions = ActionVersions.from_github(spec.name)
+    if not versions.has_versions:
+        return None
     if version_strategy == VersionStrategy.MAJOR:
         return versions.latest_major_version
     if version_strategy == VersionStrategy.SPECIFIC:
