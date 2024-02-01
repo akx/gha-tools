@@ -11,7 +11,7 @@ from pathlib import Path
 
 from gha_tools.github_api import get_github_json
 
-uses_regexp = re.compile(r"(?P<prelude>\s*uses:\s*)(?P<uses>.+?)$", re.MULTILINE)
+uses_regexp = re.compile(r"(?P<prelude>\buses:\s*)(?P<uses>.+?)$", re.MULTILINE)
 
 log = logging.getLogger(__name__)
 
