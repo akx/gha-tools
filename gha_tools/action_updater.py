@@ -149,7 +149,7 @@ def _fixup_use(
             action_name = parsed_uses
     except Exception:
         pass
-    if ".github/workflows" in action_name:
+    if ".github/" in action_name:
         log.debug("Skipping workflow %s", action_name)
         return match.group(0)
     spec = ActionSpec.from_string(action_name)
