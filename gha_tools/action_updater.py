@@ -99,7 +99,10 @@ class ActionVersions:
             prospective_major_version = version.name.partition(".")[0]
             if major_version := all_versions.get(prospective_major_version):
                 return major_version
-        raise NoVersionsFound("Could not determine major version")
+        raise NoVersionsFound(
+            f"Could not determine major version from {version.name!r}; "
+            f"none of {set(all_versions)} matched",
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -203,7 +206,10 @@ def get_new_version_with_strategy(
     versions = ActionVersions.from_github(spec.name)
     new_version = versions.get_latest_version()
     if version_strategy == VersionStrategy.MAJOR:
-        new_version = versions.get_major_version_for_action_version(new_version)
+        try:
+            new_version = versions.get_major_version_for_action_version(new_version)
+        except NoVersionsFound as nve:
+            log.warning("No major version found for %s: %s", spec, nve)
     return new_version
 
 
