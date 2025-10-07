@@ -24,25 +24,39 @@ def test_autoupdate(victim_path):
     assert "# comment" in result.output  # Comment retained
 
 
-def test_autoupdate_pin(victim_path):
+@pytest.mark.parametrize("pin", ("all", "third_party"))
+def test_autoupdate_pin(victim_path, pin):
     test_yml_path = victim_path / "test.yml"
     result = CliRunner().invoke(
         main,
         [
             "autoupdate",
             "--write",
-            "--pin",
+            f"--pin={pin}",
             str(test_yml_path),
         ],
     )
     assert result.exit_code == 0
     content = test_yml_path.read_text()
-    for action in ("actions/checkout", "actions/setup-python"):
-        assert re.search(
-            rf"^\s+- uses: {action}@[0-9a-f]+\s+# v",
-            content,
-            flags=re.MULTILINE,
-        )
+    for action in (
+        "actions/checkout",
+        "actions/setup-python",
+        "codecov/codecov-action",
+    ):
+        if pin == "third_party" and "actions/" in action:
+            # When pinning only third-party actions,
+            # first-party actions are just left as tags
+            assert re.search(
+                rf"^\s+- uses: {action}@v",
+                content,
+                flags=re.MULTILINE,
+            )
+        else:
+            assert re.search(
+                rf"^\s+- uses: {action}@[0-9a-f]+\s+# v",
+                content,
+                flags=re.MULTILINE,
+            )
 
 
 @pytest.mark.parametrize("pin", (False, True))
@@ -53,7 +67,7 @@ def test_autoupdate_major(victim_path, pin):
         [
             "autoupdate",
             "--write",
-            *(("--pin",) if pin else ()),
+            *(("--pin=all",) if pin else ()),
             "--version-strategy=specific",
             str(uv_yml_path),
         ],

@@ -12,8 +12,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: akx/pre-commit-uv-action@v0.1.0
+      - uses: actions/checkout@v5.0.0
+      - uses: akx/pre-commit-uv-action@19e2cbdb93404ff82f52044f07306443bc0bff7a # v0.1.0
   #  mypy:
   #    runs-on: ubuntu-latest
   #    steps:
@@ -30,8 +30,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: astral-sh/setup-uv@v6.8.0
+      - uses: actions/checkout@v5.0.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.10"
       - run: uvx hatch run cov

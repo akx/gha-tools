@@ -5,7 +5,11 @@ from pathlib import Path
 
 import click
 
-from gha_tools.action_updater import VersionStrategy, get_action_updates_for_path
+from gha_tools.action_updater import (
+    PinStrategy,
+    VersionStrategy,
+    get_action_updates_for_path,
+)
 
 yaml_extensions = (".yml", ".yaml")
 
@@ -24,27 +28,38 @@ def main(
     )
 
 
-@main.command(help="Update action versions.")
+@main.command(
+    help="Update action versions.",
+    context_settings={
+        # This is a bit of a hack, but hey...
+        "token_normalize_func": lambda x: x.replace("third-party", "third_party"),
+    },
+)
 @click.argument("files", nargs=-1, type=click.Path(exists=True, path_type=Path))
 @click.option("--diff/--no-diff", default=False, help="Print diff.")
 @click.option("--write/--no-write", default=False, help="Write changes.")
 @click.option(
     "--version-strategy",
     "-s",
-    type=click.Choice([vs.value for vs in VersionStrategy]),
+    type=click.Choice(VersionStrategy, case_sensitive=False),
     help="Version strategy to use.",
     default=VersionStrategy.MAJOR.value,
 )
-@click.option("--pin/--no-pin", default=False, help="Pin to commit SHA instead of tag.")
+@click.option(
+    "--pin-strategy",
+    "--pin",
+    type=click.Choice(PinStrategy, case_sensitive=False),
+    help="Pinning strategy to use.",
+    default=PinStrategy.NONE.value,
+)
 def autoupdate(
     *,
     files: list[Path],
     diff: bool,
     write: bool,
-    version_strategy: str,
-    pin: bool,
+    version_strategy: VersionStrategy,
+    pin_strategy: PinStrategy,
 ) -> None:
-    version_strategy = VersionStrategy(version_strategy)
     actual_files = list(find_files(files))
 
     if not actual_files:
@@ -55,7 +70,7 @@ def autoupdate(
         result = get_action_updates_for_path(
             file,
             version_strategy=version_strategy,
-            pin_to_sha=pin,
+            pin_strategy=pin_strategy,
         )
         if not result.changes:
             log.info(f"  No changes to {file}.")
