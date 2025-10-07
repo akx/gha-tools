@@ -35,12 +35,14 @@ def main(
     help="Version strategy to use.",
     default=VersionStrategy.MAJOR.value,
 )
+@click.option("--pin/--no-pin", default=False, help="Pin to commit SHA instead of tag.")
 def autoupdate(
     *,
     files: list[Path],
     diff: bool,
     write: bool,
     version_strategy: str,
+    pin: bool,
 ) -> None:
     version_strategy = VersionStrategy(version_strategy)
     actual_files = list(find_files(files))
@@ -53,6 +55,7 @@ def autoupdate(
         result = get_action_updates_for_path(
             file,
             version_strategy=version_strategy,
+            pin_to_sha=pin,
         )
         if not result.changes:
             log.info(f"  No changes to {file}.")

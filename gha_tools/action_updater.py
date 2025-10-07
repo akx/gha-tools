@@ -177,6 +177,7 @@ def _fixup_use(
     *,
     updates: list[ActionUpdate],
     version_strategy: VersionStrategy,
+    pin_to_sha: bool,
 ) -> str:
     action_name = match.group("uses")
     action_name = try_unquote(action_name)
@@ -190,8 +191,8 @@ def _fixup_use(
         log.warning("Could not get new version for %s", spec, exc_info=True)
     else:
         updated_spec = spec.with_version_and_comment(
-            version=new_version.name,
-            comment=spec.comment,
+            version=new_version.commit_sha if pin_to_sha else new_version.name,
+            comment=new_version.name if pin_to_sha else spec.comment,
         )
         if spec != updated_spec:
             updates.append(ActionUpdate(spec, updated_spec))
@@ -218,9 +219,15 @@ def get_action_updates_for_text(
     *,
     path: Path | None = None,
     version_strategy: VersionStrategy = VersionStrategy.MAJOR,
+    pin_to_sha: bool = False,
 ) -> ActionUpdateResult:
     updates: list[ActionUpdate] = []
-    fixer = partial(_fixup_use, updates=updates, version_strategy=version_strategy)
+    fixer = partial(
+        _fixup_use,
+        updates=updates,
+        version_strategy=version_strategy,
+        pin_to_sha=pin_to_sha,
+    )
     new_content = uses_regexp.sub(fixer, content)
     return ActionUpdateResult(
         path=path,
@@ -234,9 +241,11 @@ def get_action_updates_for_path(
     path: Path,
     *,
     version_strategy: VersionStrategy = VersionStrategy.MAJOR,
+    pin_to_sha: bool = False,
 ) -> ActionUpdateResult:
     return get_action_updates_for_text(
         path.read_text(),
         path=path,
         version_strategy=version_strategy,
+        pin_to_sha=pin_to_sha,
     )
