@@ -8,6 +8,7 @@ import re
 from enum import Enum
 from functools import lru_cache, partial
 from pathlib import Path
+from typing import Iterable
 from urllib.error import HTTPError
 
 from gha_tools.github_api import get_github_json
@@ -15,6 +16,10 @@ from gha_tools.github_api import get_github_json
 uses_regexp = re.compile(r"(?P<prelude>\buses:\s*)(?P<uses>.+?)$", re.MULTILINE)
 
 log = logging.getLogger(__name__)
+
+
+class NoVersionsFound(Exception):
+    pass
 
 
 class VersionStrategy(Enum):
@@ -28,6 +33,28 @@ def is_beta_or_rc(ver: str) -> bool:
     if "-rc" in ver:
         return True
     return False
+
+
+def try_unquote(val: str) -> str:
+    try:  # unquote strings
+        if isinstance(parsed_uses := ast.literal_eval(val), str):
+            return parsed_uses
+    except Exception:
+        pass
+    return val
+
+
+@dataclasses.dataclass(frozen=True)
+class ActionVersion:
+    _data: dict
+
+    @property
+    def name(self) -> str:
+        return self._data["name"]
+
+    @property
+    def commit_sha(self) -> str:
+        return self._data["commit"]["sha"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -51,36 +78,28 @@ class ActionVersions:
         return cls(name=action_name, all_version_infos=action_tags)
 
     @property
-    def has_versions(self) -> bool:
-        return bool(self.all_version_infos)
-
-    @property
-    def non_beta_or_rc_version_infos(self) -> list[dict]:
-        return [
-            version_info
+    def non_beta_or_rc_versions(self) -> Iterable[ActionVersion]:
+        return (
+            ActionVersion(version_info)
             for version_info in self.all_version_infos
             if not is_beta_or_rc(version_info["name"])
-        ]
+        )
 
-    @property
-    def latest_version(self) -> str:
-        return self.non_beta_or_rc_version_infos[0]["name"]
+    def get_latest_version(self) -> ActionVersion:
+        for ver in self.non_beta_or_rc_versions:
+            return ver
+        raise NoVersionsFound("No non-beta/rc versions found")
 
-    @property
-    def version_names(self) -> list[str]:
-        return [
-            version_info["name"] for version_info in self.non_beta_or_rc_version_infos
-        ]
-
-    @property
-    def latest_major_version(self) -> str:
-        version_names = self.version_names
-        latest_version = self.latest_version
-        if latest_version.startswith("v"):
-            prospective_major_version = latest_version.partition(".")[0]
-            if prospective_major_version in version_names:
-                return prospective_major_version
-        return latest_version
+    def get_major_version_for_action_version(
+        self,
+        version: ActionVersion,
+    ) -> ActionVersion:
+        all_versions = {av.name: av for av in self.non_beta_or_rc_versions}
+        if version.name.startswith("v"):
+            prospective_major_version = version.name.partition(".")[0]
+            if major_version := all_versions.get(prospective_major_version):
+                return major_version
+        raise NoVersionsFound("Could not determine major version")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -88,24 +107,37 @@ class ActionSpec:
     name: str
     version: str
     qualified: bool = False
+    comment: str | None = None
 
     @classmethod
     def from_string(cls, action_spec: str) -> ActionSpec:
+        comment = None
+        if "#" in action_spec:
+            action_spec, comment = action_spec.split("#", 1)
+            action_spec = action_spec.strip()
+            comment = comment.strip()
         if "/" not in action_spec:
             action_spec = f"actions/{action_spec}"
             qualified = False
         else:
             qualified = True
         name, version = action_spec.split("@")
-        return cls(name=name, version=version, qualified=qualified)
+        return cls(
+            name=name,
+            version=version,
+            qualified=qualified,
+            comment=comment or None,
+        )
 
     def __str__(self) -> str:
-        if self.qualified:
-            return f"{self.name}@{self.version}"
-        return f"{self.name.partition('/')[2]}@{self.version}"
+        name_part = self.name if self.qualified else self.name.partition("/")[2]
+        s = f"{name_part}@{self.version}"
+        if self.comment:
+            s += f" # {self.comment}"
+        return s
 
-    def with_version(self, version: str) -> ActionSpec:
-        return dataclasses.replace(self, version=version)
+    def with_version_and_comment(self, version: str, comment: str | None) -> ActionSpec:
+        return dataclasses.replace(self, version=version, comment=comment)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -144,38 +176,35 @@ def _fixup_use(
     version_strategy: VersionStrategy,
 ) -> str:
     action_name = match.group("uses")
-    try:  # unquote strings
-        if isinstance(parsed_uses := ast.literal_eval(action_name), str):
-            action_name = parsed_uses
-    except Exception:
-        pass
+    action_name = try_unquote(action_name)
     if ".github/" in action_name:
         log.debug("Skipping workflow %s", action_name)
         return match.group(0)
     spec = ActionSpec.from_string(action_name)
-    new_version = get_new_version_with_strategy(spec, version_strategy)
-    if new_version:
-        updated_spec = spec.with_version(new_version)
+    try:
+        new_version = get_new_version_with_strategy(spec, version_strategy)
+    except Exception:
+        log.warning("Could not get new version for %s", spec, exc_info=True)
+    else:
+        updated_spec = spec.with_version_and_comment(
+            version=new_version.name,
+            comment=spec.comment,
+        )
         if spec != updated_spec:
             updates.append(ActionUpdate(spec, updated_spec))
             return f"{match.group('prelude')}{updated_spec}"
-    else:
-        log.info("Could not determine version for %s", spec)
     return match.group(0)
 
 
 def get_new_version_with_strategy(
     spec: ActionSpec,
     version_strategy: VersionStrategy,
-) -> str | None:
+) -> ActionVersion:
     versions = ActionVersions.from_github(spec.name)
-    if not versions.has_versions:
-        return None
+    new_version = versions.get_latest_version()
     if version_strategy == VersionStrategy.MAJOR:
-        return versions.latest_major_version
-    if version_strategy == VersionStrategy.SPECIFIC:
-        return versions.latest_version
-    raise ValueError(f"Unknown version strategy: {version_strategy}")
+        new_version = versions.get_major_version_for_action_version(new_version)
+    return new_version
 
 
 def get_action_updates_for_text(

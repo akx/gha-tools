@@ -19,3 +19,4 @@ def test_autoupdate(victim_path):
     assert "-      - uses: actions/setup-python@v1" in result.output
     assert "+      - uses: actions/setup-python@v" in result.output
     assert "beta" not in result.output
+    assert "# comment" in result.output  # Comment retained
