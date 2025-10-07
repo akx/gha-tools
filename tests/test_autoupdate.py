@@ -1,19 +1,16 @@
-from pathlib import Path
 
 from click.testing import CliRunner
 
 from gha_tools.cli import main
 
 
-def test_autoupdate():
-    runner = CliRunner()
-    victim_dir = Path(__file__).parent / "autoupdate_victim"
-    result = runner.invoke(
+def test_autoupdate(victim_path):
+    result = CliRunner().invoke(
         main,
         [
             "autoupdate",
             "--diff",
-            str(victim_dir),
+            str(victim_path),
         ],
     )
     assert result.exit_code == 0
