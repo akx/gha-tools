@@ -27,6 +27,12 @@ class VersionStrategy(Enum):
     SPECIFIC = "specific"
 
 
+class PinStrategy(Enum):
+    NONE = "none"
+    THIRD_PARTY = "third_party"
+    ALL = "all"
+
+
 def is_beta_or_rc(ver: str) -> bool:
     if "-beta" in ver:
         return True
@@ -142,6 +148,10 @@ class ActionSpec:
     def with_version_and_comment(self, version: str, comment: str | None) -> ActionSpec:
         return dataclasses.replace(self, version=version, comment=comment)
 
+    @property
+    def is_first_party(self) -> bool:
+        return self.name.startswith("actions/") or self.name.startswith("github/")
+
 
 @dataclasses.dataclass(frozen=True)
 class ActionUpdate:
@@ -177,7 +187,7 @@ def _fixup_use(
     *,
     updates: list[ActionUpdate],
     version_strategy: VersionStrategy,
-    pin_to_sha: bool,
+    pin_strategy: PinStrategy,
 ) -> str:
     action_name = match.group("uses")
     action_name = try_unquote(action_name)
@@ -190,6 +200,9 @@ def _fixup_use(
     except Exception:
         log.warning("Could not get new version for %s", spec, exc_info=True)
     else:
+        pin_to_sha = pin_strategy == PinStrategy.ALL or (
+            pin_strategy == PinStrategy.THIRD_PARTY and not spec.is_first_party
+        )
         updated_spec = spec.with_version_and_comment(
             version=new_version.commit_sha if pin_to_sha else new_version.name,
             comment=new_version.name if pin_to_sha else spec.comment,
@@ -219,14 +232,14 @@ def get_action_updates_for_text(
     *,
     path: Path | None = None,
     version_strategy: VersionStrategy = VersionStrategy.MAJOR,
-    pin_to_sha: bool = False,
+    pin_strategy: PinStrategy = PinStrategy.NONE,
 ) -> ActionUpdateResult:
     updates: list[ActionUpdate] = []
     fixer = partial(
         _fixup_use,
         updates=updates,
         version_strategy=version_strategy,
-        pin_to_sha=pin_to_sha,
+        pin_strategy=pin_strategy,
     )
     new_content = uses_regexp.sub(fixer, content)
     return ActionUpdateResult(
@@ -241,11 +254,11 @@ def get_action_updates_for_path(
     path: Path,
     *,
     version_strategy: VersionStrategy = VersionStrategy.MAJOR,
-    pin_to_sha: bool = False,
+    pin_strategy: PinStrategy = PinStrategy.NONE,
 ) -> ActionUpdateResult:
     return get_action_updates_for_text(
         path.read_text(),
         path=path,
         version_strategy=version_strategy,
-        pin_to_sha=pin_to_sha,
+        pin_strategy=pin_strategy,
     )

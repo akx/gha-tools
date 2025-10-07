@@ -48,6 +48,27 @@ Updating .github/workflows/ci.yml...
      runs-on: ubuntu-20.04
 ```
 
+#### Version pinning
+
+GitHub Actions best practice is to pin the versions of actions to a specific version SHA, as tags may be mutable.
+You can use `--pin` to have `gha-tools autoupdate` pin the action to the latest commit SHA for the specified version tag.
+If you trust the first-party actions to use immutable tags, use `--pin=third_party`; otherwise use `--pin=all`.
+
+```console
+$ gha-tools autoupdate --pin=third_party --diff .github/workflows
+Updating .github/workflows/test.yml...
+--- .github/workflows/test.yml
++++ .github/workflows/test.yml
+@@ -12,13 +12,13 @@
+   lint:
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/checkout@v3
+-      - uses: akx/pre-commit-uv-action@v0.1.0
++      - uses: actions/checkout@v5
++      - uses: akx/pre-commit-uv-action@19e2cbdb93404ff82f52044f07306443bc0bff7a # v0.1.0
+```
+
 ## GitHub Rate Limiting
 
 Since this tool uses the GitHub API, you may run into rate limiting issues.
