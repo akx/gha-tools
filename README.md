@@ -29,6 +29,8 @@ update the action versions to the latest available version.
 * You can use `--diff` to see what changes would be made. This can be used in conjunction with `--write`.
 * You can use `--version-strategy=specific` to update to a specific latest version tag instead of the major
   tag, e.g. `v1.2.3` instead of `v1`.  The default is to use the major tag, when available.
+  * You can use `--first-party-version-strategy` and `--third-party-version-strategy` to set different version
+    strategies for first-party and third-party actions respectively.
 
 ```console
 $ gha-tools autoupdate --diff .github/workflows
@@ -67,6 +69,26 @@ Updating .github/workflows/test.yml...
 -      - uses: akx/pre-commit-uv-action@v0.1.0
 +      - uses: actions/checkout@v5
 +      - uses: akx/pre-commit-uv-action@19e2cbdb93404ff82f52044f07306443bc0bff7a # v0.1.0
+```
+
+#### Separate version strategies
+
+You can use different version strategies for first-party and third-party actions.
+For example, to keep first-party actions on major versions but use specific versions for third-party actions:
+
+```console
+$ gha-tools autoupdate --first-party-version-strategy=major --third-party-version-strategy=specific --diff .github/workflows
+Updating .github/workflows/test.yml...
+--- .github/workflows/test.yml
++++ .github/workflows/test.yml
+@@ -5,6 +5,6 @@
+     steps:
+-      - uses: actions/checkout@v3
+-      - uses: actions/setup-python@v4
+-      - uses: codecov/codecov-action@v3
++      - uses: actions/checkout@v5
++      - uses: actions/setup-python@v6
++      - uses: codecov/codecov-action@v5.5.1
 ```
 
 ## GitHub Rate Limiting

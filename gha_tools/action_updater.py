@@ -33,6 +33,14 @@ class PinStrategy(Enum):
     ALL = "all"
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ActionUpdateConfig:
+    first_party_version_strategy: VersionStrategy
+    third_party_version_strategy: VersionStrategy
+    first_party_pattern: re.Pattern
+    pin_strategy: PinStrategy
+
+
 def is_beta_or_rc(ver: str) -> bool:
     if "-beta" in ver:
         return True
@@ -145,10 +153,6 @@ class ActionSpec:
     def with_version_and_comment(self, version: str, comment: str | None) -> ActionSpec:
         return dataclasses.replace(self, version=version, comment=comment)
 
-    @property
-    def is_first_party(self) -> bool:
-        return self.name.startswith("actions/") or self.name.startswith("github/")
-
 
 @dataclasses.dataclass(frozen=True)
 class ActionUpdate:
@@ -183,8 +187,7 @@ def _fixup_use(
     match: re.Match,
     *,
     updates: list[ActionUpdate],
-    version_strategy: VersionStrategy,
-    pin_strategy: PinStrategy,
+    config: ActionUpdateConfig,
 ) -> str:
     action_name = match.group("uses")
     action_name = try_unquote(action_name)
@@ -192,13 +195,15 @@ def _fixup_use(
         log.debug("Skipping workflow %s", action_name)
         return match.group(0)
     spec = ActionSpec.from_string(action_name)
+    is_first_party = bool(config.first_party_pattern.match(spec.name))
+    version_strategy = config.first_party_version_strategy if is_first_party else config.third_party_version_strategy
     try:
         new_version = get_new_version_with_strategy(spec, version_strategy)
     except Exception:
         log.warning("Could not get new version for %s", spec, exc_info=True)
     else:
-        pin_to_sha = pin_strategy == PinStrategy.ALL or (
-            pin_strategy == PinStrategy.THIRD_PARTY and not spec.is_first_party
+        pin_to_sha = config.pin_strategy == PinStrategy.ALL or (
+            config.pin_strategy == PinStrategy.THIRD_PARTY and not is_first_party
         )
         updated_spec = spec.with_version_and_comment(
             version=new_version.commit_sha if pin_to_sha else new_version.name,
@@ -228,16 +233,10 @@ def get_action_updates_for_text(
     content: str,
     *,
     path: Path | None = None,
-    version_strategy: VersionStrategy = VersionStrategy.MAJOR,
-    pin_strategy: PinStrategy = PinStrategy.NONE,
+    config: ActionUpdateConfig,
 ) -> ActionUpdateResult:
     updates: list[ActionUpdate] = []
-    fixer = partial(
-        _fixup_use,
-        updates=updates,
-        version_strategy=version_strategy,
-        pin_strategy=pin_strategy,
-    )
+    fixer = partial(_fixup_use, updates=updates, config=config)
     new_content = uses_regexp.sub(fixer, content)
     return ActionUpdateResult(
         path=path,
@@ -250,12 +249,6 @@ def get_action_updates_for_text(
 def get_action_updates_for_path(
     path: Path,
     *,
-    version_strategy: VersionStrategy = VersionStrategy.MAJOR,
-    pin_strategy: PinStrategy = PinStrategy.NONE,
+    config: ActionUpdateConfig,
 ) -> ActionUpdateResult:
-    return get_action_updates_for_text(
-        path.read_text(),
-        path=path,
-        version_strategy=version_strategy,
-        pin_strategy=pin_strategy,
-    )
+    return get_action_updates_for_text(path.read_text(), path=path, config=config)
