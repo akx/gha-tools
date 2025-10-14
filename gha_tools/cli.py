@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
+from typing import cast
 
 import click
 
 from gha_tools.action_updater import (
+    ActionUpdateConfig,
     PinStrategy,
     VersionStrategy,
     get_action_updates_for_path,
@@ -32,7 +35,10 @@ def main(
     help="Update action versions.",
     context_settings={
         # This is a bit of a hack, but hey...
-        "token_normalize_func": lambda x: x.replace("third-party", "third_party"),
+        "token_normalize_func": lambda x: x.replace(
+            "third-party",
+            "third_party",
+        ).replace("first-party", "first_party"),
     },
 )
 @click.argument("files", nargs=-1, type=click.Path(exists=True, path_type=Path))
@@ -42,8 +48,20 @@ def main(
     "--version-strategy",
     "-s",
     type=click.Choice(VersionStrategy, case_sensitive=False),
-    help="Version strategy to use.",
-    default=VersionStrategy.MAJOR.value,
+    help="Version strategy to use for both first-party and third-party actions.",
+    default=None,
+)
+@click.option(
+    "--first-party-version-strategy",
+    type=click.Choice(VersionStrategy, case_sensitive=False),
+    help="Version strategy to use for first-party actions.",
+    default=None,
+)
+@click.option(
+    "--third-party-version-strategy",
+    type=click.Choice(VersionStrategy, case_sensitive=False),
+    help="Version strategy to use for third-party actions.",
+    default=None,
 )
 @click.option(
     "--pin-strategy",
@@ -52,26 +70,44 @@ def main(
     help="Pinning strategy to use.",
     default=PinStrategy.NONE.value,
 )
+@click.option(
+    "--first-party-pattern",
+    type=str,
+    help="Regular expression pattern to match first-party actions (default: %(default)s).",
+    default=r"^(actions|github)/",
+)
 def autoupdate(
     *,
     files: list[Path],
     diff: bool,
     write: bool,
-    version_strategy: VersionStrategy,
+    version_strategy: VersionStrategy | None,
+    first_party_version_strategy: VersionStrategy | None,
+    third_party_version_strategy: VersionStrategy | None,
     pin_strategy: PinStrategy,
+    first_party_pattern: str,
 ) -> None:
     actual_files = list(find_files(files))
 
     if not actual_files:
         raise click.UsageError("No files or directories specified.")
 
+    config = ActionUpdateConfig(
+        first_party_version_strategy=cast(
+            VersionStrategy,
+            first_party_version_strategy or version_strategy or VersionStrategy.MAJOR,
+        ),
+        third_party_version_strategy=cast(
+            VersionStrategy,
+            third_party_version_strategy or version_strategy or VersionStrategy.MAJOR,
+        ),
+        pin_strategy=pin_strategy,
+        first_party_pattern=re.compile(first_party_pattern),
+    )
+
     for file in actual_files:
         log.info(f"Updating {file}...")
-        result = get_action_updates_for_path(
-            file,
-            version_strategy=version_strategy,
-            pin_strategy=pin_strategy,
-        )
+        result = get_action_updates_for_path(file, config=config)
         if not result.changes:
             log.info(f"  No changes to {file}.")
             continue

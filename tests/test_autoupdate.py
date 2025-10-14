@@ -89,3 +89,51 @@ def test_autoupdate_specific(victim_path, pin):
         assert is_pinned("astral-sh/setup-uv", content)
     else:
         assert is_specific_tag("astral-sh/setup-uv", content)
+
+
+def test_separate_version_strategies(victim_path):
+    test_yml_path = victim_path / "test.yml"
+    result = CliRunner().invoke(
+        main,
+        [
+            "autoupdate",
+            "--write",
+            "--first-party-version-strategy=major",
+            "--third-party-version-strategy=specific",
+            str(test_yml_path),
+        ],
+    )
+    assert result.exit_code == 0
+    content = test_yml_path.read_text()
+
+    # First-party actions (actions/checkout, actions/setup-python) should use major versions
+    assert is_major_tag("actions/checkout", content)
+    assert is_major_tag("actions/setup-python", content)
+    # Third-party actions (codecov/codecov-action) should use specific versions
+    assert is_specific_tag("codecov/codecov-action", content)
+
+
+def test_custom_first_party_pattern(victim_path):
+    test_yml_path = victim_path / "test.yml"
+    # Test using a custom pattern that treats codecov as first-party
+    result = CliRunner().invoke(
+        main,
+        [
+            "autoupdate",
+            "--write",
+            "--first-party-version-strategy=major",
+            "--third-party-version-strategy=specific",
+            "--first-party-pattern=^(actions|github|codecov)/",
+            str(test_yml_path),
+        ],
+    )
+    assert result.exit_code == 0
+    content = test_yml_path.read_text()
+
+    # All actions should use major versions (since codecov is now first-party)
+    for action in (
+        "actions/checkout",
+        "actions/setup-python",
+        "codecov/codecov-action",
+    ):
+        assert is_major_tag(action, content)
