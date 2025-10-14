@@ -73,9 +73,7 @@ class ActionVersions:
     def from_github(cls, action_name: str) -> ActionVersions:
         log.debug("Fetching versions for %s...", action_name)
         try:
-            action_tags = get_github_json(
-                f"https://api.github.com/repos/{action_name}/tags",
-            )
+            action_tags = get_github_json(f"https://api.github.com/repos/{action_name}/tags")
         except HTTPError as he:
             if he.status == 404:
                 log.warning("Action %s (or tags for it) not found.", action_name)
@@ -106,8 +104,7 @@ class ActionVersions:
             if major_version := all_versions.get(prospective_major_version):
                 return major_version
         raise NoVersionsFound(
-            f"Could not determine major version from {version.name!r}; "
-            f"none of {set(all_versions)} matched",
+            f"Could not determine major version from {version.name!r}; none of {set(all_versions)} matched",
         )
 
 
