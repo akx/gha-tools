@@ -9,10 +9,15 @@ from urllib.error import HTTPError
 
 from gha_tools.__about__ import __version__
 
+# Optional cache; see `conftest.py`.
+cache: dict[str, Any] | None = None
+
 
 def get_github_json(url: str) -> Any:
     if not url.startswith("https://api.github.com/"):
         raise ValueError("URL must be a GitHub API URL")
+    if cache is not None and url in cache:
+        return cache[url]
     request = urllib.request.Request(
         url,
         headers={
@@ -30,4 +35,7 @@ def get_github_json(url: str) -> Any:
         content = f.read().decode("utf-8", "replace")
         if f.status != 200:
             raise HTTPError(url, f.status, f.reason, f.headers, None)
-        return json.loads(content)
+    data = json.loads(content)
+    if cache is not None:
+        cache[url] = data
+    return data
