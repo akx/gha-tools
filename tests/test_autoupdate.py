@@ -6,6 +6,18 @@ from click.testing import CliRunner
 from gha_tools.cli import main
 
 
+@pytest.fixture(autouse=True, scope="module")
+def cache_github_api():
+    from gha_tools import github_api
+
+    github_api.cache = {}
+    try:
+        yield
+    finally:
+        assert github_api.cache  # did use cache?
+        github_api.cache = None
+
+
 def is_pinned(action: str, content: str) -> re.Match | None:
     pat = rf"^\s+- uses: {action}@[0-9a-f]+\s+# v"
     return re.search(pat, content, flags=re.MULTILINE)
