@@ -6,6 +6,25 @@ from click.testing import CliRunner
 from gha_tools.cli import main
 
 
+def is_pinned(action: str, content: str) -> re.Match | None:
+    pat = rf"^\s+- uses: {action}@[0-9a-f]+\s+# v"
+    return re.search(pat, content, flags=re.MULTILINE)
+
+
+def is_major_tag(action: str, content: str) -> re.Match | None:
+    pat = rf"^\s+- uses: {action}@v\d+\s"
+    return re.search(pat, content, flags=re.MULTILINE)
+
+
+def is_specific_tag(action: str, content: str) -> re.Match | None:
+    pat = rf"^\s+- uses: {action}@v\d+\.\d+"
+    return re.search(pat, content, flags=re.MULTILINE)
+
+
+def is_tag(action: str, content: str) -> re.Match | None:
+    return is_major_tag(action, content) or is_specific_tag(action, content)
+
+
 def test_autoupdate(victim_path):
     result = CliRunner().invoke(
         main,
@@ -46,21 +65,13 @@ def test_autoupdate_pin(victim_path, pin):
         if pin == "third_party" and "actions/" in action:
             # When pinning only third-party actions,
             # first-party actions are just left as tags
-            assert re.search(
-                rf"^\s+- uses: {action}@v",
-                content,
-                flags=re.MULTILINE,
-            )
+            assert is_tag(action, content)
         else:
-            assert re.search(
-                rf"^\s+- uses: {action}@[0-9a-f]+\s+# v",
-                content,
-                flags=re.MULTILINE,
-            )
+            assert is_pinned(action, content)
 
 
 @pytest.mark.parametrize("pin", (False, True))
-def test_autoupdate_major(victim_path, pin):
+def test_autoupdate_specific(victim_path, pin):
     uv_yml_path = victim_path / "uv.yml"
     result = CliRunner().invoke(
         main,
@@ -74,4 +85,7 @@ def test_autoupdate_major(victim_path, pin):
     )
     assert result.exit_code == 0
     content = uv_yml_path.read_text()
-    assert re.search(r"(@|# )v\d+\.\d+", content)
+    if pin:
+        assert is_pinned("astral-sh/setup-uv", content)
+    else:
+        assert is_specific_tag("astral-sh/setup-uv", content)
