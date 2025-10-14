@@ -44,18 +44,6 @@ dev = [
 [tool.hatch.version]
 path = "gha_tools/__about__.py"
 
-[tool.hatch.envs.default]
-dependencies = [
-    "pytest",
-    "pytest-cov",
-]
-[tool.hatch.envs.default.scripts]
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=gha_tools --cov=tests {args}"
-no-cov = "cov --no-cov {args}"
-
-[[tool.hatch.envs.test.matrix]]
-python = ["310", "311", "312", "313"]
-
 [tool.coverage.run]
 branch = true
 parallel = true
