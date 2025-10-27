@@ -149,3 +149,28 @@ def test_custom_first_party_pattern(victim_path):
         "codecov/codecov-action",
     ):
         assert is_major_tag(action, content)
+
+
+def test_subdirectory_actions(victim_path):
+    """Test that actions in subdirectories (e.g., github/codeql-action/upload-sarif) are handled correctly."""
+    codeql_yml_path = victim_path / "codeql.yml"
+    result = CliRunner().invoke(
+        main,
+        [
+            "autoupdate",
+            "--write",
+            "--version-strategy=major",
+            str(codeql_yml_path),
+        ],
+    )
+    assert result.exit_code == 0
+    content = codeql_yml_path.read_text()
+
+    # All codeql-action subdirectory actions should be updated
+    for action in (
+        "github/codeql-action/init",
+        "github/codeql-action/autobuild",
+        "github/codeql-action/analyze",
+        "github/codeql-action/upload-sarif",
+    ):
+        assert is_major_tag(action, content)
