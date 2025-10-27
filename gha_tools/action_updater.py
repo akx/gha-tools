@@ -6,7 +6,7 @@ import difflib
 import logging
 import re
 from enum import Enum
-from functools import lru_cache, partial
+from functools import cached_property, lru_cache, partial
 from pathlib import Path
 from typing import Iterable
 from urllib.error import HTTPError
@@ -153,6 +153,15 @@ class ActionSpec:
     def with_version_and_comment(self, version: str, comment: str | None) -> ActionSpec:
         return dataclasses.replace(self, version=version, comment=comment)
 
+    @cached_property
+    def repository_name(self) -> str:
+        """
+        Extract the repository name from the action name.
+        For actions with subdirectories (e.g., 'github/codeql-action/upload-sarif'),
+        returns just the repository part (e.g., 'github/codeql-action').
+        """
+        return "/".join(self.name.split("/")[:2])
+
 
 @dataclasses.dataclass(frozen=True)
 class ActionUpdate:
@@ -219,7 +228,9 @@ def get_new_version_with_strategy(
     spec: ActionSpec,
     version_strategy: VersionStrategy,
 ) -> ActionVersion:
-    versions = ActionVersions.from_github(spec.name)
+    # Use repository_name to handle actions in subdirectories
+    # e.g., 'github/codeql-action/upload-sarif' -> 'github/codeql-action'
+    versions = ActionVersions.from_github(spec.repository_name)
     new_version = versions.get_latest_version()
     if version_strategy == VersionStrategy.MAJOR:
         try:
