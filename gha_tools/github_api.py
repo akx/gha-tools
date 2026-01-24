@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import base64
-import json
 import os
-import urllib.request
 from typing import Any
-from urllib.error import HTTPError
+
+import httpx
 
 from gha_tools.__about__ import __version__
 
@@ -18,24 +16,25 @@ def get_github_json(url: str) -> Any:
         raise ValueError("URL must be a GitHub API URL")
     if cache is not None and url in cache:
         return cache[url]
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": f"gha-tools/{__version__} (@akx)",
-        },
-    )
-    if auth := (os.environ.get("GITHUB_AUTH") or os.environ.get("GITHUB_TOKEN")):
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": f"gha-tools/{__version__} (@akx)",
+    }
+
+    auth = os.environ.get("GITHUB_AUTH") or os.environ.get("GITHUB_TOKEN")
+    auth_tuple: tuple[str, str] | None = None
+    if auth:
         if ":" in auth:
-            auth = base64.b64encode(auth.encode("utf-8")).decode("utf-8")
-            request.add_header("Authorization", f"Basic {auth}")
+            username, password = auth.split(":", 1)
+            auth_tuple = (username, password)
         else:
-            request.add_header("Authorization", f"Bearer {auth}")
-    with urllib.request.urlopen(request) as f:
-        content = f.read().decode("utf-8", "replace")
-        if f.status != 200:
-            raise HTTPError(url, f.status, f.reason, f.headers, None)
-    data = json.loads(content)
+            headers["Authorization"] = f"Bearer {auth}"
+
+    with httpx.Client() as client:
+        response = client.get(url, headers=headers, auth=auth_tuple, follow_redirects=True)
+        response.raise_for_status()
+        data = response.json()
+
     if cache is not None:
         cache[url] = data
     return data

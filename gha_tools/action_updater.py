@@ -9,7 +9,8 @@ from enum import Enum
 from functools import cached_property, lru_cache, partial
 from pathlib import Path
 from typing import Iterable
-from urllib.error import HTTPError
+
+import httpx
 
 from gha_tools.github_api import get_github_json
 
@@ -82,8 +83,8 @@ class ActionVersions:
         log.debug("Fetching versions for %s...", action_name)
         try:
             action_tags = get_github_json(f"https://api.github.com/repos/{action_name}/tags")
-        except HTTPError as he:
-            if he.status == 404:
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
                 log.warning("Action %s (or tags for it) not found.", action_name)
                 return cls(name=action_name, all_version_infos=[])
             raise
